@@ -27,9 +27,9 @@
     <div id="root"></div>
     <div id="fallback">
       <h1>Can’t load the app</h1>
-      <p>This single-file build uses CDNs for React, ReactDOM, Babel, and Tailwind. If you open it offline before installing the PWA, you may see a blank page.</p>
-      <p>Fixes: connect to the internet once to let the PWA cache files, then use it offline.</p>
+      <p>If you open this the first time while offline, CDNs may fail. Connect once to cache via the service worker, then it will work offline.</p>
     </div>
+
     <script src="https://unpkg.com/react@18/umd/react.production.min.js" crossorigin></script>
     <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js" crossorigin></script>
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
@@ -40,13 +40,16 @@
           navigator.serviceWorker.register('./service-worker.js').catch(console.error);
         });
       }
-      // Show fallback if CDNs are unavailable
-      window.addEventListener('load',function(){var ok=!!(window.React&&window.ReactDOM&&window.Babel);if(!ok){document.getElementById('fallback').style.display='block';}});
+      // Show fallback if CDNs fail
+      window.addEventListener('load',function(){
+        var ok=!!(window.React&&window.ReactDOM&&window.Babel);
+        if(!ok){document.getElementById('fallback').style.display='block';}
+      });
     </script>
 
     <script type="text/babel" data-presets="env,react">
       const { useEffect, useMemo, useRef, useState } = React;
-      const STORAGE_KEY = "interval-timer:pwa-v1";
+      const STORAGE_KEY = "interval-timer:pwa-v2"; // bump storage when structure changes
 
       function loadSaved(){ try{ const raw=localStorage.getItem(STORAGE_KEY); return raw?JSON.parse(raw):null;}catch{return null;} }
       function saveState(obj){ try{ localStorage.setItem(STORAGE_KEY, JSON.stringify(obj)); }catch{} }
@@ -54,9 +57,28 @@
       function toSeconds(v){ const n=Number(v); return Number.isFinite(n)&&n>=0?Math.round(n):0; }
       function fmt(mmss){ const m=Math.floor(mmss/60), s=mmss%60; return String(m)+":"+String(s).padStart(2,"0"); }
 
+      // WebAudio beeper + iOS unlock
       function useBeep(enabled){
         const ctxRef=useRef(null);
-        return (freq=880,durationMs=120)=>{
+        const unlockedRef=useRef(false);
+
+        const unlockAudio=()=>{ // call inside user gesture (Start/Skip/Back)
+          try{
+            if(!ctxRef.current){
+              const Ctx=window.AudioContext||window.webkitAudioContext;
+              ctxRef.current=new Ctx();
+            }
+            const ctx=ctxRef.current;
+            if(ctx.state==="suspended") ctx.resume();
+            // tiny inaudible blip to satisfy iOS gesture requirement
+            const o=ctx.createOscillator(); const g=ctx.createGain();
+            g.gain.value=0.0001; o.connect(g).connect(ctx.destination);
+            o.start(); o.stop(ctx.currentTime+0.01);
+            unlockedRef.current=true;
+          }catch{}
+        };
+
+        const beep=(freq=880,durationMs=120)=>{
           if(!enabled) return;
           try{
             if(!ctxRef.current){
@@ -64,24 +86,24 @@
               ctxRef.current=new Ctx();
             }
             const ctx=ctxRef.current;
+            if(ctx.state==="suspended") ctx.resume();
             const t0=ctx.currentTime;
-            const o=ctx.createOscillator();
-            const g=ctx.createGain();
-            o.type="sine";
-            o.frequency.value=freq;
+            const o=ctx.createOscillator(); const g=ctx.createGain();
+            o.type="sine"; o.frequency.value=freq;
             g.gain.setValueAtTime(0.00001,t0);
             g.gain.exponentialRampToValueAtTime(0.22,t0+0.01);
             g.gain.exponentialRampToValueAtTime(0.00001,t0+durationMs/1000);
-            o.connect(g).connect(ctx.destination);
-            o.start(t0);
-            o.stop(t0+durationMs/1000);
+            o.connect(g).connect(ctx.destination); o.start(t0); o.stop(t0+durationMs/1000);
           }catch{}
         };
+
+        return { beep, unlockAudio, ctxRef, unlockedRef };
       }
 
+      // Your two presets only
       const presetList=[
         {name:"Wall Sits", work:30, rest:30, rounds:3},
-        {name:"Planks", work:20, rest:20, rounds:3}
+        {name:"Planks",   work:20, rest:20, rounds:3}
       ];
 
       function IntervalTimer(){
@@ -100,7 +122,7 @@
 
         const announceRef=useRef(null), lastTick=useRef(null), lastWholeSecond=useRef(null);
         const totalTime=useMemo(()=>work*rounds+rest*(rounds-1)+warmupDur,[work,rest,rounds,warmupDur]);
-        const beep=useBeep(sound);
+        const { beep, unlockAudio } = useBeep(sound);
 
         useEffect(()=>{ saveState({work,rest,rounds,warmupDur,sound}); },[work,rest,rounds,warmupDur,sound]);
 
@@ -182,18 +204,19 @@
 
         // Controls
         const start=()=>{
+          unlockAudio();           // iOS/Safari: unlock audio on user gesture
           if(phase==="done") reset();
           setPhase("warmup"); setRemaining(warmupDur); setRunning(true);
           lastTick.current=null; lastWholeSecond.current=null; announce("Warm-up");
         };
         const pause=()=>setRunning(false);
         const reset=()=>{ setRunning(false); setPhase("work"); setRound(1); setRemaining(work); lastTick.current=null; lastWholeSecond.current=null; };
-        const skip=()=>{
+        const skip=()=>{ unlockAudio();
           if(phase==="warmup"){ setPhase("work"); setRemaining(work); return; }
           if(phase==="work" && rest>0 && round<rounds){ setPhase("rest"); setRemaining(rest); }
           else { advanceRound(); }
         };
-        const back=()=>{
+        const back=()=>{ unlockAudio();
           if(phase==="rest"){ setPhase("work"); setRemaining(work); }
           else if(phase==="work"){
             if(round>1){
@@ -217,14 +240,13 @@
         },[running,phase,work,rest,round,rounds,warmupDur]);
 
         const phaseDur = phase==="warmup"?warmupDur: phase==="work"?work: phase==="rest"?rest: 1;
-        const remainingForProgress = clamp(remaining, 0, Math.max(1, phaseDur));
-        const progress = 1 - remainingForProgress / Math.max(1, phaseDur);
+        const remainingForProgress = Math.max(0, Math.min(remaining, Math.max(1,phaseDur)));
+        const progress = 1 - remainingForProgress/Math.max(1,phaseDur);
         const displaySecs = Math.max(0, Math.round(remaining));
         const circle=useMemo(()=>{ const size=280, stroke=16, r=(size-stroke)/2, c=2*Math.PI*r; return {size,stroke,r,c}; },[]);
         const pct=Math.round(progress*100);
 
         const applyPreset=(p)=>{ setWork(p.work); setRest(p.rest); setRounds(p.rounds); reset(); };
-
         const showSettings = !running || phase === "done"; // hide while running
 
         return (
