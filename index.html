@@ -14,8 +14,11 @@
     html,body{height:100%}
     body{margin:0;background:var(--bg);color:var(--text);font:16px/1.4 system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif}
     .container{min-height:100%;display:flex;align-items:center;justify-content:center;padding:24px}
-    .card{background:linear-gradient(180deg,rgba(255,255,255,0.03),rgba(255,255,255,0.01)); border:1px solid var(--panelBorder);
-      border-radius:24px;padding:24px;box-shadow:var(--shadow); width:100%; max-width:880px}
+    .card{
+      background:linear-gradient(180deg,rgba(255,255,255,0.03),rgba(255,255,255,0.01));
+      border:1px solid var(--panelBorder); border-radius:24px; padding:24px; box-shadow:var(--shadow);
+      width:100%; max-width:880px
+    }
     .titleRow{display:flex;align-items:center;justify-content:space-between;margin-bottom:12px}
     .title{font-weight:700;font-size:28px;letter-spacing:.2px}
     .iconbtn{padding:8px;border-radius:12px;background:#1f1f1f;border:1px solid #2b2b2b;cursor:pointer}
@@ -42,7 +45,6 @@
     @keyframes pulse{0%{transform:scale(1)}50%{transform:scale(1.02)}100%{transform:scale(1)}}
     #timerPanel{display:block}
     #settingsPanel{display:none}
-    /* Preset row styles (Timer Panel) */
     .presetTimerRow{display:flex;gap:10px;justify-content:center;align-items:center;margin-top:10px;flex-wrap:wrap}
   </style>
 </head>
@@ -55,7 +57,8 @@
           <div class="title">Interval Timer</div>
           <button id="openSettings" class="iconbtn" aria-label="Open settings" title="Settings">
             <!-- Gear icon with high-contrast stroke -->
-            <svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="var(--text)" stroke-width="2">
+            <svg xmlns="http://www.w3.org/2000/svg" width="22" height="22"
+                 viewBox="0 0 24 24" fill="none" stroke="var(--text)" stroke-width="2">
               <path d="M12 15.5a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7Z"/>
               <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09a1.65 1.65 0 0 0-1-1.51 1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09a1.65 1.65 0 0 0 1.51-1 1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33h0A1.65 1.65 0 0 0 9 3.09V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51h0a1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82v0A1.65 1.65 0 0 0 21 12h.09a2 2 0 1 1 0 4H21a1.65 1.65 0 0 0-1.6-.99Z"/>
             </svg>
@@ -98,7 +101,8 @@
           <div class="title">Settings</div>
           <button id="closeSettings" class="iconbtn" aria-label="Close settings" title="Close">
             <!-- X icon with high-contrast stroke -->
-            <svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="var(--text)" stroke-width="2">
+            <svg xmlns="http://www.w3.org/2000/svg" width="22" height="22"
+                 viewBox="0 0 24 24" fill="none" stroke="var(--text)" stroke-width="2">
               <path d="M18 6 6 18M6 6l12 12"/>
             </svg>
           </button>
@@ -138,7 +142,7 @@
 
   <script>
   (function(){
-    const STORAGE_KEY = "interval-timer:offline-v5";
+    const STORAGE_KEY = "interval-timer:offline-v6";
 
     const $ = (sel, el=document) => el.querySelector(sel);
     const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
@@ -162,7 +166,28 @@
     let lastWhole = null;
     let rafId = null;
 
-    // Audio (WebAudio) with unlock on gesture
+    // --- Screen Wake Lock (keep display on while running) ---
+    let wakeLock = null;
+    async function acquireWakeLock() {
+      try {
+        if ('wakeLock' in navigator) {
+          wakeLock = await navigator.wakeLock.request('screen');
+          wakeLock.addEventListener('release', () => { wakeLock = null; });
+        }
+      } catch (err) {
+        console.debug('WakeLock error:', err && err.name);
+      }
+    }
+    async function releaseWakeLock() {
+      try {
+        if (wakeLock) { await wakeLock.release(); wakeLock = null; }
+      } catch {}
+    }
+    document.addEventListener('visibilitychange', () => {
+      if (document.visibilityState === 'visible' && running) acquireWakeLock();
+    });
+
+    // Audio (WebAudio) with unlock on user gesture
     let audioCtx = null;
     function ensureCtx(){
       if(!audioCtx){
@@ -266,7 +291,7 @@
       pauseBtn.style.display = running ? "" : "none";
       backBtn.disabled = (round===1 && phase==="work");
 
-      // NEW: hide gear & presets while running
+      // Hide gear & presets while running
       if (openSettingsBtn) openSettingsBtn.style.display = running ? "none" : "";
       if (presetRow) presetRow.style.display = running ? "none" : "";
 
@@ -283,12 +308,24 @@
     function start(){
       unlockAudio();
       if (phase === "done") reset();
+      acquireWakeLock(); // keep screen on
       phase = "warmup"; remaining = warmup; running = true; lastTick = null; lastWhole = null;
       updateUI();
       loop();
     }
-    function pause(){ running = false; cancelAnimationFrame(rafId); updateUI(); }
-    function reset(){ running = false; phase = "work"; round = 1; remaining = work; lastTick=null; lastWhole=null; cancelAnimationFrame(rafId); updateUI(); }
+    function pause(){
+      running = false;
+      releaseWakeLock();
+      cancelAnimationFrame(rafId);
+      updateUI();
+    }
+    function reset(){
+      running = false;
+      releaseWakeLock();
+      phase = "work"; round = 1; remaining = work; lastTick=null; lastWhole=null;
+      cancelAnimationFrame(rafId);
+      updateUI();
+    }
     function skip(){
       unlockAudio();
       if (phase === "warmup"){ phase="work"; remaining=work; updateUI(); return; }
@@ -323,6 +360,7 @@
       } else {
         finishSound();
         phase = "done"; running = false; remaining = 0;
+        releaseWakeLock(); // release on completion
       }
       updateUI();
     }
@@ -334,6 +372,7 @@
       } else if (phase === "work"){
         if (round >= rounds){
           finishSound(); phase="done"; running=false; remaining=0;
+          releaseWakeLock();
         } else if (rest > 0){
           beep(1175,200);
           phase="rest"; remaining=rest;
