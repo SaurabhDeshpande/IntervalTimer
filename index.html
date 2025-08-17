@@ -1,344 +1,392 @@
 <!doctype html>
 <html lang="en">
-  <head>
-    <meta charset="utf-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <meta name="theme-color" content="#0a0a0a" />
-    <link rel="manifest" href="manifest.webmanifest">
-    <title>Interval Timer</title>
-    <link rel="apple-touch-icon" href="icons/icon-192.png">
-    <script src="https://cdn.tailwindcss.com"></script>
-    <script>
-      tailwind.config = { safelist: [
-        'focus:border-emerald-400','focus:ring-emerald-500/30',
-        'focus:border-sky-400','focus:ring-sky-500/30',
-        'focus:border-violet-400','focus:ring-violet-500/30',
-        'focus:border-amber-400','focus:ring-amber-500/30',
-        'text-emerald-400','text-sky-400','text-purple-400','text-amber-400'
-      ] };
-    </script>
-    <style>
-      body { background:#0a0a0a; color:#e5e5e5; }
-      #fallback{display:none;max-width:720px;margin:2rem auto;padding:1rem 1.25rem;background:#111;border:1px solid #333;border-radius:12px;font:14px/1.45 system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif}
-      #fallback h1{font-size:18px;margin:0 0 .5rem}
-    </style>
-  </head>
-  <body class="min-h-screen">
-    <div id="root"></div>
-    <div id="fallback">
-      <h1>Can’t load the app</h1>
-      <p>If you open this the first time while offline, CDNs may fail. Connect once to cache via the service worker, then it will work offline.</p>
-    </div>
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Interval Timer</title>
+  <style>
+    :root{
+      --bg:#0b0b0b; --panelBorder:#2b2b2b; --muted:#9a9a9a; --text:#e8e8e8;
+      --emerald:#34d399; --sky:#38bdf8; --amber:#fbbf24; --violet:#a78bfa; --accent:#22c55e;
+      --btn:#232323; --btnHover:#2d2d2d; --shadow:0 10px 24px rgba(0,0,0,.35);
+    }
+    *{box-sizing:border-box}
+    html,body{height:100%}
+    body{margin:0;background:var(--bg);color:var(--text);font:16px/1.4 system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif}
+    .container{min-height:100%;display:flex;align-items:center;justify-content:center;padding:24px}
+    .card{background:linear-gradient(180deg,rgba(255,255,255,0.03),rgba(255,255,255,0.01)); border:1px solid var(--panelBorder);
+      border-radius:24px;padding:24px;box-shadow:var(--shadow); width:100%; max-width:880px}
+    .titleRow{display:flex;align-items:center;justify-content:space-between;margin-bottom:12px}
+    .title{font-weight:700;font-size:28px;letter-spacing:.2px}
+    .iconbtn{padding:8px;border-radius:12px;background:#1f1f1f;border:1px solid #2b2b2b;cursor:pointer}
+    .centerCol{display:flex;flex-direction:column;align-items:center;gap:16px}
+    .btnRow{display:flex;flex-wrap:wrap;gap:10px;justify-content:center}
+    .btn{background:var(--btn);border:1px solid var(--panelBorder);color:var(--text);padding:10px 14px;border-radius:14px;cursor:pointer}
+    .btn:hover{background:var(--btnHover)}
+    .btn.primary{background:var(--accent);color:#0b0b0b;border-color:#16a34a}
+    .btn.primary:hover{filter:brightness(1.05)}
+    .btn.warn{background:var(--amber);color:#0b0b0b;border-color:#d6a416}
+    .btn:disabled{opacity:.5;cursor:not-allowed}
+    .muted{color:var(--muted);font-size:12px}
+    .fieldGrid{display:grid;gap:12px}
+    @media (min-width:620px){ .fieldGrid{grid-template-columns:repeat(4,1fr)} }
+    .field label{display:block;color:var(--muted);font-size:12px;margin:0 0 6px}
+    .field input{width:100%;padding:10px 12px;border-radius:14px;background:#1a1a1a;border:1px solid var(--panelBorder);color:var(--text);outline:none}
+    .field input:focus{border-color:#3b82f6;box-shadow:0 0 0 6px rgba(59,130,246,.15)}
+    .ringWrap{position:relative}
+    .ringText{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;gap:6px}
+    .phase{font-size:12px;color:var(--muted);text-transform:uppercase;letter-spacing:.15em}
+    .time{font-size:80px;line-height:1;font-variant-numeric:tabular-nums;font-weight:800}
+    .round{font-size:13px;color:var(--muted)}
+    .pulse{animation:pulse .6s ease}
+    @keyframes pulse{0%{transform:scale(1)}50%{transform:scale(1.02)}100%{transform:scale(1)}}
+    #timerPanel{display:block}
+    #settingsPanel{display:none}
+    /* Preset row styles (Timer Panel) */
+    .presetTimerRow{display:flex;gap:10px;justify-content:center;align-items:center;margin-top:10px;flex-wrap:wrap}
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="card">
+      <!-- TIMER PANEL -->
+      <div id="timerPanel">
+        <div class="titleRow">
+          <div class="title">Interval Timer</div>
+          <button id="openSettings" class="iconbtn" aria-label="Open settings" title="Settings">
+            <!-- Gear icon with high-contrast stroke -->
+            <svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="var(--text)" stroke-width="2">
+              <path d="M12 15.5a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7Z"/>
+              <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09a1.65 1.65 0 0 0-1-1.51 1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09a1.65 1.65 0 0 0 1.51-1 1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33h0A1.65 1.65 0 0 0 9 3.09V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51h0a1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82v0A1.65 1.65 0 0 0 21 12h.09a2 2 0 1 1 0 4H21a1.65 1.65 0 0 0-1.6-.99Z"/>
+            </svg>
+          </button>
+        </div>
 
-    <script src="https://unpkg.com/react@18/umd/react.production.min.js" crossorigin></script>
-    <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js" crossorigin></script>
-    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
-    <script>
-      // Register the service worker
-      if ('serviceWorker' in navigator) {
-        window.addEventListener('load', () => {
-          navigator.serviceWorker.register('./service-worker.js').catch(console.error);
-        });
-      }
-      // Show fallback if CDNs fail
-      window.addEventListener('load',function(){
-        var ok=!!(window.React&&window.ReactDOM&&window.Babel);
-        if(!ok){document.getElementById('fallback').style.display='block';}
-      });
-    </script>
-
-    <script type="text/babel" data-presets="env,react">
-      const { useEffect, useMemo, useRef, useState } = React;
-      const STORAGE_KEY = "interval-timer:pwa-v2"; // bump storage when structure changes
-
-      function loadSaved(){ try{ const raw=localStorage.getItem(STORAGE_KEY); return raw?JSON.parse(raw):null;}catch{return null;} }
-      function saveState(obj){ try{ localStorage.setItem(STORAGE_KEY, JSON.stringify(obj)); }catch{} }
-      function clamp(v,lo,hi){ return Math.max(lo, Math.min(v,hi)); }
-      function toSeconds(v){ const n=Number(v); return Number.isFinite(n)&&n>=0?Math.round(n):0; }
-      function fmt(mmss){ const m=Math.floor(mmss/60), s=mmss%60; return String(m)+":"+String(s).padStart(2,"0"); }
-
-      // WebAudio beeper + iOS unlock
-      function useBeep(enabled){
-        const ctxRef=useRef(null);
-        const unlockedRef=useRef(false);
-
-        const unlockAudio=()=>{ // call inside user gesture (Start/Skip/Back)
-          try{
-            if(!ctxRef.current){
-              const Ctx=window.AudioContext||window.webkitAudioContext;
-              ctxRef.current=new Ctx();
-            }
-            const ctx=ctxRef.current;
-            if(ctx.state==="suspended") ctx.resume();
-            // tiny inaudible blip to satisfy iOS gesture requirement
-            const o=ctx.createOscillator(); const g=ctx.createGain();
-            g.gain.value=0.0001; o.connect(g).connect(ctx.destination);
-            o.start(); o.stop(ctx.currentTime+0.01);
-            unlockedRef.current=true;
-          }catch{}
-        };
-
-        const beep=(freq=880,durationMs=120)=>{
-          if(!enabled) return;
-          try{
-            if(!ctxRef.current){
-              const Ctx=window.AudioContext||window.webkitAudioContext;
-              ctxRef.current=new Ctx();
-            }
-            const ctx=ctxRef.current;
-            if(ctx.state==="suspended") ctx.resume();
-            const t0=ctx.currentTime;
-            const o=ctx.createOscillator(); const g=ctx.createGain();
-            o.type="sine"; o.frequency.value=freq;
-            g.gain.setValueAtTime(0.00001,t0);
-            g.gain.exponentialRampToValueAtTime(0.22,t0+0.01);
-            g.gain.exponentialRampToValueAtTime(0.00001,t0+durationMs/1000);
-            o.connect(g).connect(ctx.destination); o.start(t0); o.stop(t0+durationMs/1000);
-          }catch{}
-        };
-
-        return { beep, unlockAudio, ctxRef, unlockedRef };
-      }
-
-      // Your two presets only
-      const presetList=[
-        {name:"Wall Sits", work:30, rest:30, rounds:3},
-        {name:"Planks",   work:20, rest:20, rounds:3}
-      ];
-
-      function IntervalTimer(){
-        const saved=useMemo(loadSaved,[]);
-        const [work,setWork]=useState(saved?.work??20);
-        const [rest,setRest]=useState(saved?.rest??10);
-        const [rounds,setRounds]=useState(saved?.rounds??8);
-        const [warmupDur,setWarmupDur]=useState(saved?.warmupDur??5);
-        const [sound,setSound]=useState(saved?.sound??true);
-
-        const [running,setRunning]=useState(false);
-        const [phase,setPhase]=useState("work"); // warmup|work|rest|done
-        const [round,setRound]=useState(1);
-        const [remaining,setRemaining]=useState(work); // fractional seconds for smooth ring
-        const [justSwitched,setJustSwitched]=useState(false);
-
-        const announceRef=useRef(null), lastTick=useRef(null), lastWholeSecond=useRef(null);
-        const totalTime=useMemo(()=>work*rounds+rest*(rounds-1)+warmupDur,[work,rest,rounds,warmupDur]);
-        const { beep, unlockAudio } = useBeep(sound);
-
-        useEffect(()=>{ saveState({work,rest,rounds,warmupDur,sound}); },[work,rest,rounds,warmupDur,sound]);
-
-        // Keep remaining synced when editing while stopped
-        useEffect(()=>{
-          if(!running){
-            if(phase==="warmup") setRemaining(warmupDur);
-            else if(phase==="work") setRemaining(work);
-            else if(phase==="rest") setRemaining(rest);
-            else setRemaining(0);
-          }
-        },[work,rest,warmupDur,phase,running]);
-
-        // RAF tick: fractional seconds for smooth ring, 3-2-1 beeps for warm-up + rest
-        useEffect(()=>{
-          if(!running||phase==="done") return;
-          let rafId;
-          const tick=(t)=>{
-            if(!lastTick.current) lastTick.current=t;
-            const dt=t-lastTick.current; lastTick.current=t;
-            setRemaining(prev=>{
-              const next=prev-dt/1000;
-              const nextClamped=next<=0?0:next;
-              const whole=Math.max(0, Math.ceil(nextClamped));
-              if(phase==="rest" || phase==="warmup"){
-                if(lastWholeSecond.current!==whole){
-                  if([3,2,1].includes(whole)) beep(750,140);
-                  lastWholeSecond.current=whole;
-                }
-              }else{
-                lastWholeSecond.current=whole;
-              }
-              if(next<=0.0001){ handlePhaseSwitch(); return 0; }
-              return nextClamped;
-            });
-            rafId=requestAnimationFrame(tick);
-          };
-          rafId=requestAnimationFrame(tick);
-          return ()=>cancelAnimationFrame(rafId);
-        },[running,phase,work,rest,warmupDur,round,rounds]);
-
-        const announce=(text)=>{ if(announceRef.current) announceRef.current.textContent=text; };
-
-        const finish=()=>{
-          // Upbeat 3-note arpeggio
-          beep(784,180);
-          setTimeout(()=>beep(880,180),170);
-          setTimeout(()=>beep(988,260),340);
-          setPhase("done"); setRunning(false); setRemaining(0);
-          announce("Workout complete. Nice job!");
-        };
-
-        const handlePhaseSwitch=()=>{
-          setJustSwitched(true); setTimeout(()=>setJustSwitched(false),500);
-          if(phase==="warmup"){
-            beep(1000,220);
-            setPhase("work"); setRemaining(work); announce("Go! Work phase."); return;
-          }
-          if(phase==="work"){
-            if(round>=rounds){ finish(); return; } // NO final rest; complete
-            beep(1175,200);
-            if(rest>0){ setPhase("rest"); setRemaining(rest); announce("Rest."); }
-            else { advanceRound(); }
-            return;
-          }
-          if(phase==="rest"){
-            beep(880,200); advanceRound(); return;
-          }
-        };
-
-        const advanceRound=()=>{
-          if(round<rounds){
-            setRound(r=>r+1);
-            setPhase("work"); setRemaining(work);
-          }else{
-            finish();
-          }
-        };
-
-        // Controls
-        const start=()=>{
-          unlockAudio();           // iOS/Safari: unlock audio on user gesture
-          if(phase==="done") reset();
-          setPhase("warmup"); setRemaining(warmupDur); setRunning(true);
-          lastTick.current=null; lastWholeSecond.current=null; announce("Warm-up");
-        };
-        const pause=()=>setRunning(false);
-        const reset=()=>{ setRunning(false); setPhase("work"); setRound(1); setRemaining(work); lastTick.current=null; lastWholeSecond.current=null; };
-        const skip=()=>{ unlockAudio();
-          if(phase==="warmup"){ setPhase("work"); setRemaining(work); return; }
-          if(phase==="work" && rest>0 && round<rounds){ setPhase("rest"); setRemaining(rest); }
-          else { advanceRound(); }
-        };
-        const back=()=>{ unlockAudio();
-          if(phase==="rest"){ setPhase("work"); setRemaining(work); }
-          else if(phase==="work"){
-            if(round>1){
-              setRound(r=>r-1);
-              if(rest>0){ setPhase("rest"); setRemaining(rest); } else { setPhase("work"); setRemaining(work); }
-            }else{ setPhase("warmup"); setRemaining(warmupDur); }
-          }
-        };
-
-        // Keyboard shortcuts
-        useEffect(()=>{
-          const onKey=(e)=>{
-            if(e.target instanceof HTMLInputElement) return;
-            if(e.code==="Space"){ e.preventDefault(); running?pause():start(); }
-            else if(e.key.toLowerCase()==="r"){ reset(); }
-            else if(e.key.toLowerCase()==="s"){ skip(); }
-            else if(e.key.toLowerCase()==="b"){ back(); }
-          };
-          window.addEventListener("keydown", onKey);
-          return ()=>window.removeEventListener("keydown", onKey);
-        },[running,phase,work,rest,round,rounds,warmupDur]);
-
-        const phaseDur = phase==="warmup"?warmupDur: phase==="work"?work: phase==="rest"?rest: 1;
-        const remainingForProgress = Math.max(0, Math.min(remaining, Math.max(1,phaseDur)));
-        const progress = 1 - remainingForProgress/Math.max(1,phaseDur);
-        const displaySecs = Math.max(0, Math.round(remaining));
-        const circle=useMemo(()=>{ const size=280, stroke=16, r=(size-stroke)/2, c=2*Math.PI*r; return {size,stroke,r,c}; },[]);
-        const pct=Math.round(progress*100);
-
-        const applyPreset=(p)=>{ setWork(p.work); setRest(p.rest); setRounds(p.rounds); reset(); };
-        const showSettings = !running || phase === "done"; // hide while running
-
-        return (
-          <div className="min-h-screen w-full bg-neutral-950 text-neutral-100 flex items-center justify-center p-6">
-            <div className={"w-full " + (showSettings ? "max-w-5xl" : "max-w-3xl")}>
-              <div className={"grid gap-6 " + (showSettings ? "md:grid-cols-[1fr,1fr]" : "grid-cols-1")}>
-                {/* Timer Panel */}
-                <div className="bg-neutral-900/70 rounded-3xl p-6 shadow-xl border border-neutral-800">
-                  <div className="flex items-center justify-between mb-4">
-                    <h1 className="text-2xl md:text-3xl font-semibold tracking-tight">Interval Timer</h1>
-                    <div className="text-xs opacity-70">Space = Start/Pause • R = Reset • S = Skip • B = Back</div>
-                  </div>
-                  <div className="flex flex-col items-center gap-6">
-                    <div className={"relative " + (justSwitched ? "animate-pulse" : "")} aria-live="polite">
-                      <svg width={circle.size} height={circle.size} className="rotate-[-90deg] block">
-                        <circle cx={circle.size/2} cy={circle.size/2} r={circle.r} strokeWidth={circle.stroke} stroke="currentColor" className="text-neutral-800 fill-none" />
-                        <circle cx={circle.size/2} cy={circle.size/2} r={circle.r} strokeWidth={circle.stroke} stroke="currentColor" strokeDasharray={circle.c} strokeDashoffset={circle.c*(1-progress)} strokeLinecap="round" className={(phase==="work"?"text-emerald-400":phase==="rest"?"text-sky-400":phase==="warmup"?"text-amber-400":"text-purple-400")+" fill-none"} />
-                      </svg>
-                      <div className="absolute inset-0 flex flex-col items-center justify-center text-center gap-1 rotate-0">
-                        <div className="uppercase tracking-widest text-xs text-neutral-400">{phase==="done"?"Complete":phase}</div>
-                        <div className="text-7xl md:text-8xl tabular-nums font-bold">{fmt(displaySecs)}</div>
-                        <div className="text-sm text-neutral-400">{phase!=="warmup" ? (<>Round {round} / {rounds}</>) : "Warm-up"}</div>
-                      </div>
-                    </div>
-                    <div className="flex flex-wrap items-center justify-center gap-3">
-                      {!running ? (<button onClick={start} className="px-5 py-2.5 rounded-2xl bg-emerald-500 hover:bg-emerald-400 text-neutral-950 font-semibold shadow">Start</button>) : (<button onClick={pause} className="px-5 py-2.5 rounded-2xl bg-amber-400 hover:bg-amber-300 text-neutral-950 font-semibold shadow">Pause</button>)}
-                      <button onClick={reset} className="px-4 py-2.5 rounded-2xl bg-neutral-800 hover:bg-neutral-700 font-medium">Reset</button>
-                      <button onClick={back} disabled={round===1 && phase==="work"} className="px-4 py-2.5 rounded-2xl bg-neutral-800 hover:bg-neutral-700 font-medium disabled:opacity-40">Back</button>
-                      <button onClick={skip} className="px-4 py-2.5 rounded-2xl bg-neutral-800 hover:bg-neutral-700 font-medium">Skip</button>
-                    </div>
-                    <div className="text-xs text-neutral-400">Progress: {pct}% • Total: {fmt(totalTime)}</div>
-                  </div>
-                </div>
-
-                {/* Settings Panel (hidden while running) */}
-                {showSettings && (
-                  <div className="bg-neutral-900/70 rounded-3xl p-6 shadow-xl border border-neutral-800">
-                    <h2 className="text-xl font-semibold mb-4">Settings</h2>
-                    <div className="grid grid-cols-1 sm:grid-cols-4 gap-4 mb-4">
-                      <NumberField label="Warm-up (sec)" value={warmupDur} onChange={(v)=>setWarmupDur(clamp(toSeconds(v),0,600))} min={0} max={600} color="amber" />
-                      <NumberField label="Work (sec)" value={work} onChange={(v)=>setWork(clamp(toSeconds(v),0,3600))} min={0} max={3600} color="emerald" />
-                      <NumberField label="Rest (sec)" value={rest} onChange={(v)=>setRest(clamp(toSeconds(v),0,3600))} min={0} max={3600} color="sky" />
-                      <NumberField label="Rounds" value={rounds} onChange={(v)=>setRounds(clamp(toSeconds(v),1,200))} min={1} max={200} color="violet" />
-                    </div>
-                    <div className="flex items-center justify-between mb-4">
-                      <div className="flex items-center gap-3">
-                        <label className="text-sm text-neutral-300">Sound</label>
-                        <button onClick={()=>setSound(s=>!s)} className={"px-3 py-1.5 rounded-xl text-sm font-medium "+(sound?"bg-emerald-500 text-neutral-950":"bg-neutral-800")}>{sound?"On":"Off"}</button>
-                      </div>
-                      <div className="flex items-center gap-2 text-xs text-neutral-400">
-                        <span className="hidden sm:inline">Presets:</span>
-                        {presetList.map(p=>(<button key={p.name} onClick={()=>applyPreset(p)} className="px-2.5 py-1.5 rounded-2xl bg-neutral-800 hover:bg-neutral-700 text-neutral-200">{p.name}</button>))}
-                      </div>
-                    </div>
-                    <div className="rounded-2xl bg-neutral-950/40 border border-neutral-800 p-3 text-xs text-neutral-400 leading-relaxed">
-                      <p className="mb-1"><span className="text-neutral-300 font-medium">Tips:</span> Starts with a <span className="text-amber-400">{warmupDur}s warm-up</span> (beeps at 3–2–1), then cycles Work/Rest (beeps at 3–2–1 of REST). After the last WORK round, the timer completes immediately with an upbeat sound.</p>
-                      <p>Keyboard: <kbd className="bg-neutral-800 px-1 rounded">Space</kbd> start/pause • <kbd className="bg-neutral-800 px-1 rounded">R</kbd> reset • <kbd className="bg-neutral-800 px-1 rounded">S</kbd> skip • <kbd className="bg-neutral-800 px-1 rounded">B</kbd> back.</p>
-                    </div>
-                  </div>
-                )}
-
-                {/* SR announcements */}
-                <div aria-live="assertive" aria-atomic="true" className="sr-only" ref={announceRef} />
-              </div>
+        <div class="centerCol">
+          <div class="ringWrap" id="ringWrap" aria-live="polite">
+            <svg id="ring" width="300" height="300" style="transform:rotate(-90deg);display:block">
+              <circle cx="150" cy="150" r="142" stroke="#2b2b2b" stroke-width="16" fill="none"></circle>
+              <circle id="prog" cx="150" cy="150" r="142" stroke="#34d399" stroke-width="16" stroke-linecap="round" fill="none"></circle>
+            </svg>
+            <div class="ringText">
+              <div class="phase" id="phaseLabel">work</div>
+              <div class="time" id="timeLabel">0:00</div>
+              <div class="round" id="roundLabel">Round 1 / 3</div>
             </div>
           </div>
-        );
+          <div class="btnRow">
+            <button class="btn primary" id="startBtn">Start</button>
+            <button class="btn warn" id="pauseBtn" style="display:none">Pause</button>
+            <button class="btn" id="resetBtn">Reset</button>
+            <button class="btn" id="backBtn">Back</button>
+            <button class="btn" id="skipBtn">Skip</button>
+          </div>
+          <div class="muted" id="progressNote"></div>
+
+          <!-- Presets in Timer Panel (bottom, centered) -->
+          <div class="presetTimerRow" aria-label="Presets">
+            <span class="muted">Presets:</span>
+            <button class="btn" id="preset1_timer">Wall Sits</button>
+            <button class="btn" id="preset2_timer">Planks</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- SETTINGS PANEL -->
+      <div id="settingsPanel">
+        <div class="titleRow">
+          <div class="title">Settings</div>
+          <button id="closeSettings" class="iconbtn" aria-label="Close settings" title="Close">
+            <!-- X icon with high-contrast stroke -->
+            <svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="var(--text)" stroke-width="2">
+              <path d="M18 6 6 18M6 6l12 12"/>
+            </svg>
+          </button>
+        </div>
+
+        <div class="fieldGrid" style="margin-bottom:12px">
+          <div class="field">
+            <label>Warm-up (sec)</label>
+            <input type="number" id="warmupInput" min="0" max="600">
+          </div>
+          <div class="field">
+            <label>Work (sec)</label>
+            <input type="number" id="workInput" min="0" max="3600">
+          </div>
+          <div class="field">
+            <label>Rest (sec)</label>
+            <input type="number" id="restInput" min="0" max="3600">
+          </div>
+          <div class="field">
+            <label>Rounds</label>
+            <input type="number" id="roundsInput" min="1" max="200">
+          </div>
+        </div>
+
+        <div style="display:flex;align-items:center;gap:8px;margin:12px 0">
+          <span class="muted">Sound</span>
+          <button id="soundBtn" class="btn">On</button>
+        </div>
+
+        <div class="muted" style="line-height:1.5">
+          Starts with a warm-up (beeps at 3–2–1), then cycles Work/Rest (beeps at 3–2–1 of REST).
+          After the last WORK round, the timer completes immediately with an upbeat sound.
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+  (function(){
+    const STORAGE_KEY = "interval-timer:offline-v5";
+
+    const $ = (sel, el=document) => el.querySelector(sel);
+    const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
+    const toSeconds = (v) => { const n = Number(v); return Number.isFinite(n) && n >= 0 ? Math.round(n) : 0; };
+    const fmt = (s) => { s = Math.max(0, Math.round(s)); const m = Math.floor(s/60), sec = s%60; return m+":"+String(sec).padStart(2,"0"); };
+
+    // Load state
+    const saved = (() => { try { return JSON.parse(localStorage.getItem(STORAGE_KEY)) || {}; } catch { return {}; } })();
+    let work = saved.work ?? 20;
+    let rest = saved.rest ?? 10;
+    let rounds = saved.rounds ?? 3;
+    let warmup = saved.warmup ?? 5;
+    let soundOn = saved.soundOn ?? true;
+
+    // Timer state
+    let running = false;
+    let phase = "work"; // warmup|work|rest|done
+    let round = 1;
+    let remaining = work;
+    let lastTick = null;
+    let lastWhole = null;
+    let rafId = null;
+
+    // Audio (WebAudio) with unlock on gesture
+    let audioCtx = null;
+    function ensureCtx(){
+      if(!audioCtx){
+        const Ctx = window.AudioContext || window.webkitAudioContext;
+        audioCtx = new Ctx();
+      }
+      if(audioCtx.state === "suspended") audioCtx.resume();
+      return audioCtx;
+    }
+    function unlockAudio(){
+      try{
+        const ctx = ensureCtx();
+        const osc = ctx.createOscillator();
+        const g = ctx.createGain();
+        g.gain.value = 0.0001;
+        osc.connect(g).connect(ctx.destination);
+        osc.start();
+        osc.stop(ctx.currentTime + 0.01);
+      }catch{}
+    }
+    function beep(freq=880, ms=120){
+      if(!soundOn) return;
+      try{
+        const ctx = ensureCtx();
+        const t0 = ctx.currentTime;
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+        osc.type = "sine";
+        osc.frequency.value = freq;
+        gain.gain.setValueAtTime(0.00001, t0);
+        gain.gain.exponentialRampToValueAtTime(0.22, t0 + 0.01);
+        gain.gain.exponentialRampToValueAtTime(0.00001, t0 + ms/1000);
+        osc.connect(gain).connect(ctx.destination);
+        osc.start(t0);
+        osc.stop(t0 + ms/1000);
+      }catch{}
+    }
+    function finishSound(){ beep(784,180); setTimeout(()=>beep(880,180),170); setTimeout(()=>beep(988,260),340); }
+
+    // Elements
+    const openSettingsBtn = $("#openSettings");
+    const presetRow = $(".presetTimerRow");
+    const prog = $("#prog");
+    const timeLabel = $("#timeLabel");
+    const phaseLabel = $("#phaseLabel");
+    const roundLabel = $("#roundLabel");
+    const progressNote = $("#progressNote");
+    const startBtn = $("#startBtn");
+    const pauseBtn = $("#pauseBtn");
+    const resetBtn = $("#resetBtn");
+    const skipBtn  = $("#skipBtn");
+    const backBtn  = $("#backBtn");
+    const timerPanel = $("#timerPanel");
+    const settingsPanel = $("#settingsPanel");
+    const warmupInput = $("#warmupInput");
+    const workInput = $("#workInput");
+    const restInput = $("#restInput");
+    const roundsInput = $("#roundsInput");
+    const soundBtn = $("#soundBtn");
+
+    $("#openSettings").addEventListener("click", () => { unlockAudio(); showSettings(true); });
+    $("#closeSettings").addEventListener("click", () => showSettings(false));
+
+    // Timer panel presets
+    $("#preset1_timer").addEventListener("click", () => { applyPreset(30,30,3); });
+    $("#preset2_timer").addEventListener("click", () => { applyPreset(20,20,3); });
+
+    // Sound toggle
+    soundBtn.addEventListener("click", () => { soundOn = !soundOn; soundBtn.textContent = soundOn ? "On" : "Off"; save(); });
+
+    // Inputs initial + handlers
+    warmupInput.value = warmup;
+    workInput.value = work;
+    restInput.value = rest;
+    roundsInput.value = rounds;
+
+    warmupInput.addEventListener("input", e => { warmup = clamp(toSeconds(e.target.value), 0, 600); if(!running && phase==="warmup") remaining = warmup; save(); updateUI(); });
+    workInput.addEventListener("input", e => { work   = clamp(toSeconds(e.target.value), 0, 3600); if(!running && phase==="work")   remaining = work;   save(); updateUI(); });
+    restInput.addEventListener("input", e => { rest   = clamp(toSeconds(e.target.value), 0, 3600); if(!running && phase==="rest")   remaining = rest;   save(); updateUI(); });
+    roundsInput.addEventListener("input", e => { rounds = clamp(toSeconds(e.target.value), 1, 200); save(); updateUI(); });
+
+    function save(){ try { localStorage.setItem(STORAGE_KEY, JSON.stringify({work,rest,rounds,warmup,soundOn})); } catch {} }
+
+    // Ring circumference
+    const R = 142, C = 2 * Math.PI * R;
+    prog.setAttribute("stroke-dasharray", String(C));
+    prog.setAttribute("stroke-dashoffset", String(C));
+
+    function updateUI(){
+      // Colors by phase
+      prog.setAttribute("stroke", phase==="work" ? "#34d399" : phase==="rest" ? "#38bdf8" : phase==="warmup" ? "#fbbf24" : "#a78bfa");
+      phaseLabel.textContent = phase === "done" ? "complete" : phase;
+      timeLabel.textContent = fmt(remaining);
+      roundLabel.textContent = phase !== "warmup" ? `Round ${round} / ${rounds}` : "Warm-up";
+
+      const dur = phase==="warmup" ? warmup : phase==="work" ? work : phase==="rest" ? rest : 1;
+      const progFrac = 1 - Math.max(0, Math.min(remaining, Math.max(1,dur))) / Math.max(1,dur);
+      prog.setAttribute("stroke-dashoffset", String(C * (1 - progFrac)));
+
+      startBtn.style.display = running ? "none" : "";
+      pauseBtn.style.display = running ? "" : "none";
+      backBtn.disabled = (round===1 && phase==="work");
+
+      // NEW: hide gear & presets while running
+      if (openSettingsBtn) openSettingsBtn.style.display = running ? "none" : "";
+      if (presetRow) presetRow.style.display = running ? "none" : "";
+
+      const total = warmup + work*rounds + rest*Math.max(0, rounds-1);
+      const pct = Math.round(progFrac*100);
+      progressNote.textContent = `Progress: ${pct}% • Total: ${fmt(total)}`;
+    }
+
+    function showSettings(show){
+      if(show){ timerPanel.style.display="none"; settingsPanel.style.display="block"; }
+      else { settingsPanel.style.display="none"; timerPanel.style.display="block"; }
+    }
+
+    function start(){
+      unlockAudio();
+      if (phase === "done") reset();
+      phase = "warmup"; remaining = warmup; running = true; lastTick = null; lastWhole = null;
+      updateUI();
+      loop();
+    }
+    function pause(){ running = false; cancelAnimationFrame(rafId); updateUI(); }
+    function reset(){ running = false; phase = "work"; round = 1; remaining = work; lastTick=null; lastWhole=null; cancelAnimationFrame(rafId); updateUI(); }
+    function skip(){
+      unlockAudio();
+      if (phase === "warmup"){ phase="work"; remaining=work; updateUI(); return; }
+      if (phase === "work" && rest>0 && round < rounds){ phase="rest"; remaining=rest; updateUI(); }
+      else { advanceRound(); }
+    }
+    function back(){
+      unlockAudio();
+      if (phase === "rest"){ phase="work"; remaining=work; updateUI(); return; }
+      if (phase === "work"){
+        if (round > 1){
+          round -= 1;
+          if (rest>0){ phase="rest"; remaining=rest; } else { phase="work"; remaining=work; }
+          updateUI();
+        } else {
+          phase="warmup"; remaining=warmup; updateUI();
+        }
+      }
+    }
+
+    function applyPreset(w, r, n){
+      work = w; rest = r; rounds = n;
+      workInput.value = w; restInput.value = r; roundsInput.value = n;
+      reset();
+      save();
+    }
+
+    function advanceRound(){
+      if (round < rounds){
+        round += 1;
+        phase = "work"; remaining=work;
+      } else {
+        finishSound();
+        phase = "done"; running = false; remaining = 0;
+      }
+      updateUI();
+    }
+
+    function handlePhaseEdge(){
+      if (phase === "warmup"){
+        beep(1000,220);
+        phase = "work"; remaining = work;
+      } else if (phase === "work"){
+        if (round >= rounds){
+          finishSound(); phase="done"; running=false; remaining=0;
+        } else if (rest > 0){
+          beep(1175,200);
+          phase="rest"; remaining=rest;
+        } else {
+          advanceRound(); return;
+        }
+      } else if (phase === "rest"){
+        beep(880,200);
+        advanceRound(); return;
+      }
+      updateUI();
+    }
+
+    function loop(t){
+      if (!running) return;
+      if (!lastTick) lastTick = t;
+      const dt = (t - lastTick) || 16;
+      lastTick = t;
+
+      remaining = Math.max(0, remaining - dt/1000);
+
+      // Beeps at 3-2-1 for REST & WARMUP
+      const whole = Math.max(0, Math.ceil(remaining));
+      if ((phase === "rest" || phase === "warmup") && lastWhole !== whole){
+        if ([3,2,1].includes(whole)) beep(750,140);
+        lastWhole = whole;
+      } else if (phase !== "rest" && phase !== "warmup") {
+        lastWhole = whole;
       }
 
-      function NumberField({label,value,onChange,min=0,max=9999,disabled,color="emerald"}){
-        const focusBorder="focus:border-"+color+"-400";
-        const focusRing="focus:ring-2 focus:ring-"+color+"-500/30";
-        return (
-          <label className="block">
-            <div className="text-xs mb-1 text-neutral-400">{label}</div>
-            <div className="flex items-center gap-2">
-              <input
-                type="number"
-                min={min}
-                max={max}
-                value={value}
-                disabled={disabled}
-                onChange={(e)=>onChange(e.target.value)}
-                className={"w-full rounded-2xl bg-neutral-800 text-neutral-100 px-3 py-2 outline-none border border-neutral-700 "+focusBorder+" "+focusRing}
-              />
-            </div>
-          </label>
-        );
+      if (remaining <= 0.0001){
+        handlePhaseEdge();
       }
 
-      const root = ReactDOM.createRoot(document.getElementById("root"));
-      root.render(<IntervalTimer />);
-    </script>
-  </body>
+      // Smooth ring + time
+      const dur = phase==="warmup" ? warmup : phase==="work" ? work : phase==="rest" ? rest : 1;
+      const progFrac = 1 - Math.max(0, Math.min(remaining, Math.max(1,dur))) / Math.max(1,dur);
+      prog.setAttribute("stroke-dashoffset", String(C*(1-progFrac)));
+      timeLabel.textContent = fmt(remaining);
+
+      rafId = requestAnimationFrame(loop);
+    }
+
+    // Wire buttons
+    startBtn.addEventListener("click", start);
+    pauseBtn.addEventListener("click", pause);
+    resetBtn.addEventListener("click", reset);
+    skipBtn.addEventListener("click", skip);
+    backBtn.addEventListener("click", back);
+
+    // Init UI
+    updateUI();
+  })();
+  </script>
+</body>
 </html>
